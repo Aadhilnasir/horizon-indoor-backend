@@ -26,7 +26,7 @@ class AuthController extends Controller
 
         // Admin secret code check
         if (isset($data['role']) && $data['role'] === 'admin') {
-            $secret = config('app.admin_secret', 'horizon@admin2025');
+            $secret = env('ADMIN_SECRET');
             if (($data['admin_code'] ?? '') !== $secret) {
                 return response()->json([
                     'message' => 'Invalid admin secret code.',
