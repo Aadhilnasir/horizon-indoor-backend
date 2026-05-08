@@ -58,7 +58,6 @@ class FacilityController extends Controller
 
             if ($shadow && $shadow->parentBooking) {
                 $parent = $shadow->parentBooking;
-                // Use guest name if admin booked for a walk-in customer
                 $displayName  = $parent->guest_name
                     ? $parent->guest_name
                     : ($parent->user?->first_name . ' ' . $parent->user?->last_name);
@@ -82,10 +81,27 @@ class FacilityController extends Controller
                 ]);
             }
 
+            // Check if slot is locked (Processing) — return lock info
+            $lock = SlotLock::where('facility_id', $request->facility_id)
+                ->where('date',       $request->date)
+                ->where('session',    $request->session)
+                ->where('slot',       $request->slot)
+                ->where('expires_at', '>', Carbon::now())
+                ->first();
+
+            if ($lock) {
+                $lockUser = \App\Models\User::find($lock->user_id);
+                return response()->json([
+                    'booked'      => false,
+                    'is_locked'   => true,
+                    'locked_by'   => $lockUser?->username,
+                    'expires_at'  => $lock->expires_at->toISOString(),
+                ]);
+            }
+
             return response()->json(['booked' => false]);
         }
 
-        // Use guest name if admin booked for a walk-in customer
         $displayName  = $booking->guest_name
             ? $booking->guest_name
             : ($booking->user?->first_name . ' ' . $booking->user?->last_name);
@@ -121,13 +137,10 @@ class FacilityController extends Controller
     public function show($id)
     {
         $facility = Facility::findOrFail($id);
-
         return response()->json(['facility' => $facility]);
     }
 
     // ── GET /api/facilities/{id}/slots?date=2025-04-26&session=day ──────────
-    // Returns which slots are already booked for a given facility, date, session.
-    // The frontend uses this to mark slots as "Booked".
     public function availableSlots(Request $request, $id)
     {
         $request->validate([
@@ -185,40 +198,51 @@ class FacilityController extends Controller
             ]);
         }
 
-        // Get locked slots (being processed by other users)
+        // Get locked slots
         SlotLock::where('expires_at', '<', Carbon::now())->delete();
-        
+
         $currentUserId = auth('sanctum')->id();
         $authUser      = auth('sanctum')->user();
         $isAdmin       = $authUser && $authUser->role === 'admin';
 
-        // Get locked slots — both admin and user see them
-        // Admin sees them but can still book (with warning)
-        $lockedSlots = SlotLock::where('facility_id', $id)
+        // Fix 1: Admin sees ALL locked slots including their own (so held slots persist on reload)
+        // Regular users only see OTHER users' locked slots
+        $lockedQuery = SlotLock::where('facility_id', $id)
             ->where('date', $request->date)
             ->where('session', $request->session)
-            ->where('expires_at', '>', Carbon::now())
-            ->when($currentUserId, fn($q) => $q->where('user_id', '!=', $currentUserId))
-            ->pluck('slot')
-            ->unique()
-            ->values()
-            ->toArray();
+            ->where('expires_at', '>', Carbon::now());
+
+        if (!$isAdmin && $currentUserId) {
+            $lockedQuery->where('user_id', '!=', $currentUserId);
+        }
+
+        // Also return expiry times for admin so frontend can restore countdown
+        $lockedData = $lockedQuery->get(['slot', 'user_id', 'expires_at']);
+
+        $lockedSlots = $lockedData->pluck('slot')->unique()->values()->toArray();
+
+        // For admin: return expiry info per slot so frontend can restore timers
+        $adminLockInfo = [];
+        if ($isAdmin && $currentUserId) {
+            $lockedData->where('user_id', $currentUserId)->each(function ($lock) use (&$adminLockInfo) {
+                $adminLockInfo[$lock->slot] = $lock->expires_at->toISOString();
+            });
+        }
 
         return response()->json([
-            'facility_id'  => (int) $id,
-            'date'         => $request->date,
-            'session'      => $request->session,
-            'booked_slots' => $bookedSlots,
-            'locked_slots' => $lockedSlots,
-            'blocked'      => false,
-            'block_reason' => null,
-            'day_type'     => $dayType,
-            'day_rate'     => $dayRate,
-            'night_rate'   => $nightRate,
+            'facility_id'    => (int) $id,
+            'date'           => $request->date,
+            'session'        => $request->session,
+            'booked_slots'   => $bookedSlots,
+            'locked_slots'   => $lockedSlots,
+            'admin_lock_info'=> $adminLockInfo, // admin's own locks with expiry times
+            'blocked'        => false,
+            'block_reason'   => null,
+            'day_type'       => $dayType,
+            'day_rate'       => $dayRate,
+            'night_rate'     => $nightRate,
         ]);
     }
-
-
 
     // ── POST /api/admin/facilities  (admin only) ─────────────────────────────
     public function store(Request $request)
@@ -234,7 +258,6 @@ class FacilityController extends Controller
         ]);
 
         $facility = Facility::create($data);
-
         return response()->json(['facility' => $facility], 201);
     }
 
@@ -254,7 +277,6 @@ class FacilityController extends Controller
         ]);
 
         $facility->update($data);
-
         return response()->json(['facility' => $facility]);
     }
 
@@ -275,7 +297,6 @@ class FacilityController extends Controller
     {
         $facility = Facility::findOrFail($id);
         $facility->delete();
-
         return response()->json(['message' => 'Facility deleted.']);
     }
 }
