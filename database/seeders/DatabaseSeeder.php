@@ -15,11 +15,11 @@ class DatabaseSeeder extends Seeder
     {
         // ── Admin user ───────────────────────────────────────────────────────
         User::create([
-            'first_name' => 'Admin',
-            'last_name'  => 'Horizon',
-            'username'   => 'admin',
-            'email'      => 'admin@horizon.com',
-            'password'   => Hash::make('Admin@2025'),
+            'first_name' => 'Mohammed',
+            'last_name'  => 'Nasreen',
+            'username'   => 'admin@horizon',
+            'email'      => 'nasreen2717@gmail.com',
+            'password'   => Hash::make('nasreenslk5050'),
             'role'       => 'admin',
         ]);
 
