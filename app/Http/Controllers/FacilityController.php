@@ -58,15 +58,26 @@ class FacilityController extends Controller
 
             if ($shadow && $shadow->parentBooking) {
                 $parent = $shadow->parentBooking;
+                // Use guest name if admin booked for a walk-in customer
+                $displayName  = $parent->guest_name
+                    ? $parent->guest_name
+                    : ($parent->user?->first_name . ' ' . $parent->user?->last_name);
+                $displayPhone = $parent->guest_name
+                    ? ($parent->guest_phone ?? '—')
+                    : ($parent->user?->phone ?? '—');
+                $displayEmail = $parent->guest_name ? '(Walk-in customer)' : $parent->user?->email;
+
                 return response()->json([
-                    'booked'    => true,
-                    'slot'      => $request->slot,
-                    'is_shadow' => true,
+                    'booked'     => true,
+                    'slot'       => $request->slot,
+                    'is_shadow'  => true,
+                    'is_hold'    => (bool) $parent->is_hold,
+                    'is_guest'   => (bool) $parent->guest_name,
                     'booked_via' => $parent->facility?->name,
                     'user' => [
-                        'name'  => $parent->user?->first_name . ' ' . $parent->user?->last_name,
-                        'phone' => $parent->user?->phone ?? '—',
-                        'email' => $parent->user?->email,
+                        'name'  => $displayName,
+                        'phone' => $displayPhone,
+                        'email' => $displayEmail,
                     ],
                 ]);
             }
@@ -74,15 +85,26 @@ class FacilityController extends Controller
             return response()->json(['booked' => false]);
         }
 
+        // Use guest name if admin booked for a walk-in customer
+        $displayName  = $booking->guest_name
+            ? $booking->guest_name
+            : ($booking->user?->first_name . ' ' . $booking->user?->last_name);
+        $displayPhone = $booking->guest_name
+            ? ($booking->guest_phone ?? '—')
+            : ($booking->user?->phone ?? '—');
+        $displayEmail = $booking->guest_name ? '(Walk-in customer)' : $booking->user?->email;
+
         return response()->json([
             'booked'     => true,
             'slot'       => $request->slot,
             'is_shadow'  => false,
+            'is_hold'    => (bool) $booking->is_hold,
+            'is_guest'   => (bool) $booking->guest_name,
             'booked_via' => null,
             'user' => [
-                'name'  => $booking->user?->first_name . ' ' . $booking->user?->last_name,
-                'phone' => $booking->user?->phone ?? '—',
-                'email' => $booking->user?->email,
+                'name'  => $displayName,
+                'phone' => $displayPhone,
+                'email' => $displayEmail,
             ],
         ]);
     }

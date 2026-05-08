@@ -12,17 +12,22 @@ class SlotLockController extends Controller
     // ── POST /api/slots/lock ──────────────────────────────────────────────────
     public function lock(Request $request)
     {
+        $isAdmin = $request->user()->role === 'admin';
+
         $data = $request->validate([
             'facility_id' => 'required|integer',
             'date'        => 'required|date',
             'session'     => 'required|string',
             'slots'       => 'required|array|min:1',
             'slots.*'     => 'string',
-            'duration'    => 'sometimes|integer|min:1|max:15', // minutes
+            'duration'    => 'sometimes|integer|min:1|max:60', // max 60 mins for admin hold
         ]);
 
         $userId    = $request->user()->id;
-        $minutes   = $data['duration'] ?? 10; // default 10 mins
+        // Admin hold → 60 mins, regular user → max 10 mins
+        $minutes   = $isAdmin
+            ? ($data['duration'] ?? 10)
+            : min($data['duration'] ?? 10, 10);
         $expiresAt = Carbon::now()->addMinutes($minutes);
 
         // Remove any existing locks by this user for this facility/date/session
@@ -68,7 +73,7 @@ class SlotLockController extends Controller
         return response()->json([
             'message'    => 'Slots locked successfully.',
             'expires_at' => $expiresAt->toISOString(),
-            'expires_in' => 600, // seconds
+            'expires_in' => $minutes * 60, // seconds
         ]);
     }
 
