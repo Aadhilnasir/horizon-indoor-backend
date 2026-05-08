@@ -83,22 +83,25 @@ class AdminController extends Controller
             ->orderBy('created_at', 'asc')
             ->get()
             ->map(fn($b) => [
-                'id'          => $b->id,
-                'user'        => $b->user?->username,
-                'user_email'  => $b->user?->email,
-                'facility'    => $b->facility?->name,
-                'facility_id' => $b->facility_id,
-                'date'        => $b->date->format('D, d M Y'),
-                'raw_date'    => $b->date->format('Y-m-d'), // for frontend comparison
-                'session'     => $b->session,
-                'slots'       => $b->slots,
+                'id'             => $b->id,
+                'user'           => $b->user?->username,
+                'user_email'     => $b->user?->email,
+                'facility'       => $b->facility?->name,
+                'facility_id'    => $b->facility_id,
+                'date'           => $b->date->format('D, d M Y'),
+                'raw_date'       => $b->date->format('Y-m-d'),
+                'session'        => $b->session,
+                'slots'          => $b->slots,
                 'total'          => $b->total_price,
                 'paid_amount'    => $b->paid_amount,
                 'balance_due'    => $b->balance_due,
                 'payment_status' => $b->payment_status,
-                'status'      => $b->status,
-                'is_today'    => $b->date->isToday(), // flag today's bookings
-                'created_at'  => $b->created_at->format('d M Y H:i'),
+                'status'         => $b->status,
+                'is_today'       => $b->date->isToday(),
+                'guest_name'     => $b->guest_name,
+                'guest_phone'    => $b->guest_phone,
+                'is_hold'        => (bool) $b->is_hold,
+                'created_at'     => $b->created_at->format('d M Y H:i'),
             ]);
 
         return response()->json(['bookings' => $bookings]);
