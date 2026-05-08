@@ -41,13 +41,18 @@ class BookingController extends Controller
     // ── POST /api/bookings ───────────────────────────────────────────────────
     public function store(Request $request)
     {
+        $isAdmin = $request->user()->role === 'admin';
+
         $data = $request->validate([
             'facility_id' => 'required|integer|exists:facilities,id',
             'date'        => 'required|date|after_or_equal:today',
             'session'     => 'required|in:day,night',
             'slots'       => 'required|array|min:1',
             'slots.*'     => 'string',
-            'paid_amount' => 'required|integer|min:0',
+            'paid_amount' => 'sometimes|integer|min:0',
+            'guest_name'  => 'sometimes|nullable|string|max:100',
+            'guest_phone' => 'sometimes|nullable|string|max:20',
+            'is_hold'     => 'sometimes|boolean',
         ]);
 
         $facility = Facility::findOrFail($data['facility_id']);
@@ -125,19 +130,25 @@ class BookingController extends Controller
         }
 
         // ── Validate paid amount (skip for admin) ────────────────────────────
-        if ($request->user()->role !== 'admin') {
-            if ($data['paid_amount'] > $totalPrice) {
+        $paidAmount = $data['paid_amount'] ?? 0;
+        $isHold     = $isAdmin && ($data['is_hold'] ?? false);
+
+        if (!$isAdmin) {
+            if ($paidAmount < 500) {
+                return response()->json(['message' => 'Minimum deposit is LKR 500.'], 422);
+            }
+            if ($paidAmount > $totalPrice) {
                 return response()->json([
                     'message' => 'Paid amount cannot exceed total price of LKR ' . number_format($totalPrice) . '.',
                 ], 422);
             }
         }
 
-        $balanceDue     = $totalPrice - $data['paid_amount'];
-        $paymentStatus  = $balanceDue === 0 ? 'paid' : ($data['paid_amount'] > 0 ? 'partial' : 'pending');
+        $balanceDue     = $totalPrice - $paidAmount;
+        $paymentStatus  = $balanceDue === 0 ? 'paid' : ($paidAmount > 0 ? 'partial' : 'pending');
 
         // ── Create bookings in a transaction ──────────────────────────────────
-        $booking = DB::transaction(function () use ($data, $facility, $totalPrice, $request, $balanceDue, $paymentStatus) {
+        $booking = DB::transaction(function () use ($data, $facility, $totalPrice, $request, $balanceDue, $paymentStatus, $paidAmount, $parentFacilities, $isAdmin, $isHold) {
 
             // Main booking
             $booking = Booking::create([
@@ -147,11 +158,14 @@ class BookingController extends Controller
                 'session'        => $data['session'],
                 'slots'          => $data['slots'],
                 'total_price'    => $totalPrice,
-                'paid_amount'    => $data['paid_amount'],
+                'paid_amount'    => $paidAmount,
                 'balance_due'    => $balanceDue,
                 'payment_status' => $paymentStatus,
                 'status'         => 'confirmed',
                 'is_shadow'      => false,
+                'guest_name'     => $isAdmin ? ($data['guest_name'] ?? null) : null,
+                'guest_phone'    => $isAdmin ? ($data['guest_phone'] ?? null) : null,
+                'is_hold'        => $isHold,
             ]);
 
             // Forward shadow bookings
@@ -212,7 +226,7 @@ class BookingController extends Controller
             ->delete();
 
         return response()->json([
-            'message' => 'Booking confirmed!',
+            'message' => $isHold ? 'Slot held successfully.' : 'Booking confirmed!',
             'booking' => $this->formatBooking($booking),
         ], 201);
     }
@@ -312,6 +326,9 @@ class BookingController extends Controller
             'payment_status' => $b->payment_status,
             'status'         => $b->status,
             'is_today'       => $b->date->isToday(),
+            'guest_name'     => $b->guest_name,
+            'guest_phone'    => $b->guest_phone,
+            'is_hold'        => $b->is_hold,
         ];
     }
 }

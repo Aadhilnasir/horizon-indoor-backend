@@ -12,12 +12,14 @@ class Booking extends Model
         'date', 'session', 'slots',
         'total_price', 'paid_amount', 'balance_due', 'payment_status',
         'status', 'parent_booking_id', 'is_shadow',
+        'guest_name', 'guest_phone', 'is_hold',
     ];
 
     protected $casts = [
         'slots'     => 'array',
         'date'      => 'date',
         'is_shadow' => 'boolean',
+        'is_hold'   => 'boolean',
     ];
 
     // ── Relations ─────────────────────────────────────────────────────────────
