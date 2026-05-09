@@ -86,7 +86,6 @@ class BookingController extends Controller
 
         // ── CHECK 3: Reverse check ────────────────────────────────────────────
         // If booking Badminton 1 or 2 → check if Volleyball is free for those slots
-        // Find any facility that has THIS facility in its linked_facility_ids
         $parentFacilities = Facility::all()->filter(function ($f) use ($facility) {
             return ! empty($f->linked_facility_ids)
                 && in_array($facility->id, $f->linked_facility_ids);
@@ -94,7 +93,6 @@ class BookingController extends Controller
 
         foreach ($parentFacilities as $parent) {
             // excludeShadow=true: only REAL bookings block, not shadows
-            // e.g. shadow on Volleyball from Badminton 1 should NOT block Badminton 2
             if ($this->hasConflict($parent->id, $data['date'], $data['session'], $data['slots'], true)) {
                 return response()->json([
                     'message' => "Cannot book {$facility->name}: {$parent->name} is already booked for one of the selected slots (shared court).",
@@ -106,20 +104,35 @@ class BookingController extends Controller
         $rate       = $this->getFacilityRate($facility, $data['date'], $data['session']);
         $totalPrice = $rate * count($data['slots']);
 
-        // ── Check slot locks (skip for admin) ────────────────────────────────
-        if ($request->user()->role !== 'admin') {
-            // Clean expired locks first
-            SlotLock::where('expires_at', '<', Carbon::now())->delete();
+        // ── CHECK 4: Slot lock check ──────────────────────────────────────────
+        // Clean expired locks first
+        SlotLock::where('expires_at', '<', Carbon::now())->delete();
 
-            // Check if any slot is locked by another user
-            foreach ($data['slots'] as $slot) {
-                $lock = SlotLock::where('facility_id', $data['facility_id'])
-                    ->where('date', $data['date'])
-                    ->where('session', $data['session'])
-                    ->where('slot', $slot)
-                    ->where('user_id', '!=', $request->user()->id)
-                    ->where('expires_at', '>', Carbon::now())
+        // Admin CANNOT book over a regular user's active lock.
+        // Admin CAN book over another admin's hold.
+        // Regular users cannot book over any other user's lock.
+        foreach ($data['slots'] as $slot) {
+            $lockQuery = SlotLock::where('facility_id', $data['facility_id'])
+                ->where('date', $data['date'])
+                ->where('session', $data['session'])
+                ->where('slot', $slot)
+                ->where('user_id', '!=', $request->user()->id)
+                ->where('expires_at', '>', Carbon::now());
+
+            if ($isAdmin) {
+                // Admin: only blocked by regular user locks, not other admin holds
+                $lock = $lockQuery
+                    ->whereHas('user', fn($q) => $q->where('role', 'user'))
                     ->first();
+
+                if ($lock) {
+                    return response()->json([
+                        'message' => 'One or more slots are currently being booked by a customer. Please wait a few minutes.',
+                    ], 409);
+                }
+            } else {
+                // Regular user: blocked by any other user's lock
+                $lock = $lockQuery->first();
 
                 if ($lock) {
                     return response()->json([
@@ -144,8 +157,8 @@ class BookingController extends Controller
             }
         }
 
-        $balanceDue     = $totalPrice - $paidAmount;
-        $paymentStatus  = $balanceDue === 0 ? 'paid' : ($paidAmount > 0 ? 'partial' : 'pending');
+        $balanceDue    = $totalPrice - $paidAmount;
+        $paymentStatus = $balanceDue === 0 ? 'paid' : ($paidAmount > 0 ? 'partial' : 'pending');
 
         // ── Create bookings in a transaction ──────────────────────────────────
         $booking = DB::transaction(function () use ($data, $facility, $totalPrice, $request, $balanceDue, $paymentStatus, $paidAmount, $parentFacilities, $isAdmin, $isHold) {
@@ -195,7 +208,6 @@ class BookingController extends Controller
 
             foreach ($parentFacilities as $parent) {
                 // Only create reverse shadow if parent has no REAL booking yet
-                // excludeShadow=true so we don't double-shadow
                 $alreadyBlocked = $this->hasConflict(
                     $parent->id, $data['date'], $data['session'], $data['slots'], true
                 );
@@ -238,6 +250,7 @@ class BookingController extends Controller
      * Shadow bookings (auto-created) are excluded from conflict checks
      * because they are just placeholders, not real reservations.
      */
+
     /**
      * Get the correct rate for a facility based on date and session.
      * Weekday   → day_rate / night_rate
