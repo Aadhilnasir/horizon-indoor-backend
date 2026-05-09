@@ -34,6 +34,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me',      [AuthController::class, 'me']);
+    Route::put('/me',      [AuthController::class, 'updateMe']);
 
     // Slot locking
     Route::post('/slots/lock',   [SlotLockController::class, 'lock']);
@@ -60,22 +61,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/admin/users/{id}/role', [AdminController::class, 'changeRole']);
 
         // Admin holidays management
-        Route::get('/admin/holidays',              [HolidayController::class, 'adminIndex']);
-        Route::post('/admin/holidays',             [HolidayController::class, 'store']);
+        Route::get('/admin/holidays',                  [HolidayController::class, 'adminIndex']);
+        Route::post('/admin/holidays',                 [HolidayController::class, 'store']);
         Route::post('/admin/holidays/generate/{year}', [HolidayController::class, 'generate']);
-        Route::delete('/admin/holidays/{id}',      [HolidayController::class, 'destroy']);
+        Route::delete('/admin/holidays/{id}',          [HolidayController::class, 'destroy']);
 
         // Facility blocks (tournament/maintenance)
-        Route::get('/admin/facility-blocks',       [FacilityBlockController::class, 'index']);
-        Route::post('/admin/facility-blocks',      [FacilityBlockController::class, 'store']);
-        Route::delete('/admin/facility-blocks/{id}', [FacilityBlockController::class, 'destroy']);
+        Route::get('/admin/facility-blocks',           [FacilityBlockController::class, 'index']);
+        Route::post('/admin/facility-blocks',          [FacilityBlockController::class, 'store']);
+        Route::delete('/admin/facility-blocks/{id}',   [FacilityBlockController::class, 'destroy']);
 
         // Admin – facility management
-        Route::get('/admin/facilities',             [FacilityController::class, 'adminIndex']);
-        Route::get('/admin/slot-info',              [FacilityController::class, 'slotInfo']);
-        Route::post('/admin/facilities',            [FacilityController::class, 'store']);
-        Route::put('/admin/facilities/{id}',        [FacilityController::class, 'update']);
-        Route::delete('/admin/facilities/{id}',     [FacilityController::class, 'destroy']);
+        Route::get('/admin/facilities',               [FacilityController::class, 'adminIndex']);
+        Route::get('/admin/slot-info',                [FacilityController::class, 'slotInfo']);
+        Route::post('/admin/facilities',              [FacilityController::class, 'store']);
+        Route::put('/admin/facilities/{id}',          [FacilityController::class, 'update']);
+        Route::delete('/admin/facilities/{id}',       [FacilityController::class, 'destroy']);
         Route::patch('/admin/facilities/{id}/toggle', [FacilityController::class, 'toggleActive']);
     });
 });
