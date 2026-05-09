@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             'last_name'  => 'Nasreen',
             'username'   => 'admin@horizon',
             'email'      => 'nasreen2717@gmail.com',
+            'phone'      => '0750405050',
             'password'   => Hash::make('nasreenslk5050'),
             'role'       => 'admin',
         ]);
