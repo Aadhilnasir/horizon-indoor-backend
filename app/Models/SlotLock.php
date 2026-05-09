@@ -13,6 +13,11 @@ class SlotLock extends Model
 
     protected $casts = [
         'expires_at' => 'datetime',
-        'date'       => 'date',
     ];
+
+    // ── Relation — needed for admin lock check in BookingController ──────────
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }

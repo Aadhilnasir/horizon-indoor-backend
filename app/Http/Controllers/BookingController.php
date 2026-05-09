@@ -120,9 +120,17 @@ class BookingController extends Controller
                 ->where('expires_at', '>', Carbon::now());
 
             if ($isAdmin) {
-                // Admin: only blocked by regular user locks, not other admin holds
-                $lock = $lockQuery
-                    ->whereHas('user', fn($q) => $q->where('role', 'user'))
+                // Admin: only blocked by regular user locks (role='user'), NOT other admin holds
+                // Use join instead of whereHas for reliability
+                $lock = SlotLock::where('slot_locks.facility_id', $data['facility_id'])
+                    ->where('slot_locks.date', $data['date'])
+                    ->where('slot_locks.session', $data['session'])
+                    ->where('slot_locks.slot', $slot)
+                    ->where('slot_locks.user_id', '!=', $request->user()->id)
+                    ->where('slot_locks.expires_at', '>', Carbon::now())
+                    ->join('users', 'slot_locks.user_id', '=', 'users.id')
+                    ->where('users.role', 'user')
+                    ->select('slot_locks.*')
                     ->first();
 
                 if ($lock) {
