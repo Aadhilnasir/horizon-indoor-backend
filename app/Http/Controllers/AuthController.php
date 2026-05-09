@@ -19,9 +19,9 @@ class AuthController extends Controller
             'username'   => 'required|string|max:50|unique:users',
             'email'      => 'required|email|unique:users',
             'phone'      => 'required|string|max:20|regex:/^[0-9+\s]+$/',
-            'password'   => 'required|string|min:6|confirmed', // needs password_confirmation field
-            'role'       => 'sometimes|in:user,admin',         // only accepted if provided
-            'admin_code' => 'sometimes|string',                // secret code check in logic
+            'password'   => 'required|string|min:6|confirmed',
+            'role'       => 'sometimes|in:user,admin',
+            'admin_code' => 'sometimes|string',
         ]);
 
         // Admin secret code check
@@ -91,13 +91,32 @@ class AuthController extends Controller
     // ── GET /api/me ──────────────────────────────────────────────────────────
     public function me(Request $request)
     {
-        return response()->json(['user' => $this->formatUser($request->user())]);
+        return response()->json(['user' => $this->formatUser($request->user(), true)]);
+    }
+
+    // ── PUT /api/me ──────────────────────────────────────────────────────────
+    public function updateMe(Request $request)
+    {
+        $user = $request->user();
+
+        $data = $request->validate([
+            'first_name' => 'required|string|max:50',
+            'last_name'  => 'required|string|max:50',
+            'phone'      => 'sometimes|nullable|string|max:20|regex:/^[0-9+\s]+$/',
+        ]);
+
+        $user->update($data);
+
+        return response()->json([
+            'message' => 'Profile updated successfully.',
+            'user'    => $this->formatUser($user, true),
+        ]);
     }
 
     // ── Helper ───────────────────────────────────────────────────────────────
-    private function formatUser(User $user): array
+    private function formatUser(User $user, bool $withStats = false): array
     {
-        return [
+        $data = [
             'id'         => $user->id,
             'first_name' => $user->first_name,
             'last_name'  => $user->last_name,
@@ -107,5 +126,16 @@ class AuthController extends Controller
             'phone'      => $user->phone,
             'role'       => $user->role,
         ];
+
+        // Include extra stats only when requested (profile page)
+        if ($withStats) {
+            $data['bookings_count'] = $user->bookings()
+                ->where('is_shadow', false)
+                ->where('status', 'confirmed')
+                ->count();
+            $data['joined'] = $user->created_at->format('M Y');
+        }
+
+        return $data;
     }
 }
