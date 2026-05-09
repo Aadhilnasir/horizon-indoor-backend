@@ -18,7 +18,7 @@ class AuthController extends Controller
             'last_name'  => 'required|string|max:100',
             'username'   => 'required|string|max:50|unique:users',
             'email'      => 'required|email|unique:users',
-            'phone'      => 'required|string|max:20',
+            'phone'      => 'required|string|max:20|regex:/^[0-9+\s]+$/',
             'password'   => 'required|string|min:6|confirmed', // needs password_confirmation field
             'role'       => 'sometimes|in:user,admin',         // only accepted if provided
             'admin_code' => 'sometimes|string',                // secret code check in logic
