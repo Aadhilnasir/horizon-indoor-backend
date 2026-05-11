@@ -42,7 +42,7 @@ class DatabaseSeeder extends Seeder
             'icon'                => '⚽',
             'tag'                 => 'Indoor · Full pitch',
             'day_rate'            => 2000,
-            'night_rate'          => 1500,
+            'night_rate'          => 3000,
             'weekend_day_rate'    => 3000,
             'weekend_night_rate'  => 2500,
             'holiday_day_rate'    => 3000,
