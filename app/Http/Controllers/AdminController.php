@@ -20,23 +20,7 @@ class AdminController extends Controller
 
         // Apply period filter
         $filtered = clone $base;
-        switch ($period) {
-            case 'today':
-                $filtered->whereDate('date', today());
-                break;
-            case 'week':
-                $filtered->whereBetween('date', [now()->startOfWeek(), now()->endOfWeek()]);
-                break;
-            case 'month':
-                $filtered->whereMonth('date', now()->month)->whereYear('date', now()->year);
-                break;
-            case 'year':
-                $filtered->whereYear('date', now()->year);
-                break;
-            default:
-                // all time — no filter
-                break;
-        }
+        $this->applyPeriod($filtered, $period);
 
         $totalBookings   = $filtered->count();
         $totalRevenue    = $filtered->sum('total_price');
@@ -57,6 +41,68 @@ class AdminController extends Controller
             'today_bookings'   => $todayBookings,
             'period'           => $period,
         ]);
+    }
+
+    // ── GET /api/admin/revenue?period=today|week|month|year|all ──────────────
+    // Read-only list of the confirmed bookings that make up total_revenue.
+    public function revenue(Request $request)
+    {
+        $period = $request->get('period', 'all');
+
+        $base = Booking::where('is_shadow', false)->where('status', 'confirmed');
+
+        $filtered = clone $base;
+        $this->applyPeriod($filtered, $period);
+
+        $totalRevenue = (clone $filtered)->sum('total_price');
+
+        $records = $filtered->with(['user', 'facility'])
+            ->orderBy('date', 'asc')
+            ->orderBy('id', 'asc')
+            ->get()
+            ->map(fn($b) => [
+                'id'             => $b->id,
+                'date'           => $b->date->format('Y-m-d'),
+                'customer'       => $b->guest_name ?: $b->user?->username,
+                'facility'       => $b->facility?->name,
+                'session'        => $b->session,
+                'slots'          => $b->slots,
+                'total'          => $b->total_price,
+                'paid_amount'    => $b->paid_amount,
+                'balance_due'    => $b->balance_due,
+                'payment_status' => $b->payment_status,
+            ]);
+
+        return response()->json([
+            'period'        => $period,
+            'total_revenue' => $totalRevenue,
+            'count'         => $records->count(),
+            'records'       => $records,
+        ]);
+    }
+
+    // ── Shared period filter (used by stats() and revenue()) ─────────────────
+    private function applyPeriod($query, string $period)
+    {
+        switch ($period) {
+            case 'today':
+                $query->whereDate('date', today());
+                break;
+            case 'week':
+                $query->whereBetween('date', [now()->startOfWeek(), now()->endOfWeek()]);
+                break;
+            case 'month':
+                $query->whereMonth('date', now()->month)->whereYear('date', now()->year);
+                break;
+            case 'year':
+                $query->whereYear('date', now()->year);
+                break;
+            default:
+                // all time — no filter
+                break;
+        }
+
+        return $query;
     }
 
     // ── GET /api/admin/bookings ──────────────────────────────────────────────

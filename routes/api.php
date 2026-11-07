@@ -50,6 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Dashboard stats
         Route::get('/admin/stats',    [AdminController::class, 'stats']);
+        Route::get('/admin/revenue',  [AdminController::class, 'revenue']);
 
         // All bookings
         Route::get('/admin/bookings',          [AdminController::class, 'allBookings']);
