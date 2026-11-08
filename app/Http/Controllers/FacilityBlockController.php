@@ -88,6 +88,26 @@ class FacilityBlockController extends Controller
         return response()->json(['message' => 'Block removed successfully.']);
     }
 
+    // ── GET /api/facility-blocks/upcoming ────────────────────────────────────
+    // Public — blocks ending today or later
+    public function upcoming()
+    {
+        $blocks = FacilityBlock::with('facility')
+            ->whereDate('end_date', '>=', today())
+            ->orderBy('start_date')
+            ->orderBy('id')
+            ->get()
+            ->map(fn($b) => [
+                'id'         => $b->id,
+                'facility'   => $b->facility?->name,
+                'start_date' => $b->start_date->format('Y-m-d'),
+                'end_date'   => $b->end_date->format('Y-m-d'),
+                'reason'     => $b->reason,
+            ]);
+
+        return response()->json(['blocks' => $blocks]);
+    }
+
     // ── GET /api/facility-blocks?facility_id=&date= ──────────────────────────
     // Public — check if a facility is blocked on a date
     public function check(Request $request)

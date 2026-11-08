@@ -14,6 +14,7 @@ use App\Http\Controllers\SlotLockController;
 use App\Http\Controllers\FacilityBlockController;
 
 Route::get('/facility-blocks', [FacilityBlockController::class, 'check']);
+Route::get('/facility-blocks/upcoming', [FacilityBlockController::class, 'upcoming']);
 
 // ── Public routes ────────────────────────────────────────────────────────────
 Route::post('/register',         [AuthController::class, 'register']);
