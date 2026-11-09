@@ -17,12 +17,15 @@ class FacilityBlockController extends Controller
             ->orderBy('start_date', 'desc')
             ->get()
             ->map(fn($b) => [
-                'id'          => $b->id,
-                'facility_id' => $b->facility_id,
-                'facility'    => $b->facility?->name,
-                'start_date'  => $b->start_date->format('Y-m-d'),
-                'end_date'    => $b->end_date->format('Y-m-d'),
-                'reason'      => $b->reason,
+                'id'               => $b->id,
+                'facility_id'      => $b->facility_id,
+                'facility'         => $b->facility?->name,
+                'start_date'       => $b->start_date->format('Y-m-d'),
+                'end_date'         => $b->end_date->format('Y-m-d'),
+                'reason'           => $b->reason,
+                'tournament_title' => $b->tournament_title,
+                'sponsor'          => $b->sponsor,
+                'organizer'        => $b->organizer,
             ]);
 
         return response()->json(['blocks' => $blocks]);
@@ -32,32 +35,38 @@ class FacilityBlockController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'facility_id' => 'required|integer|exists:facilities,id',
-            'start_date'  => 'required|date',
-            'end_date'    => 'required|date|after_or_equal:start_date',
-            'reason'      => 'sometimes|string|max:200',
+            'facility_id'      => 'required|integer|exists:facilities,id',
+            'start_date'       => 'required|date',
+            'end_date'         => 'required|date|after_or_equal:start_date',
+            'reason'           => 'sometimes|string|max:200',
+            'tournament_title' => 'nullable|string|max:255',
+            'sponsor'          => 'nullable|string|max:255',
+            'organizer'        => 'nullable|string|max:255',
         ]);
 
         // Get linked facilities (shared courts)
         $facility = Facility::findOrFail($data['facility_id']);
         $linkedIds = $facility->linked_facility_ids ?? [];
 
+        $reason       = $data['reason'] ?? 'Tournament';
+        $isTournament = $reason === 'Tournament';
+
+        // Shared by the selected court and its linked courts
+        $attributes = [
+            'start_date'       => $data['start_date'],
+            'end_date'         => $data['end_date'],
+            'reason'           => $reason,
+            'tournament_title' => $isTournament ? ($data['tournament_title'] ?? null) : null,
+            'sponsor'          => $isTournament ? ($data['sponsor'] ?? null) : null,
+            'organizer'        => $isTournament ? ($data['organizer'] ?? null) : null,
+        ];
+
         // Block the selected facility
-        $block = FacilityBlock::create([
-            'facility_id' => $data['facility_id'],
-            'start_date'  => $data['start_date'],
-            'end_date'    => $data['end_date'],
-            'reason'      => $data['reason'] ?? 'Tournament',
-        ]);
+        $block = FacilityBlock::create(['facility_id' => $data['facility_id']] + $attributes);
 
         // Auto-block linked facilities (shared courts)
         foreach ($linkedIds as $linkedId) {
-            FacilityBlock::create([
-                'facility_id' => $linkedId,
-                'start_date'  => $data['start_date'],
-                'end_date'    => $data['end_date'],
-                'reason'      => $data['reason'] ?? 'Tournament',
-            ]);
+            FacilityBlock::create(['facility_id' => $linkedId] + $attributes);
         }
 
         return response()->json([
