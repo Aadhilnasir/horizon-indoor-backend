@@ -9,6 +9,7 @@ class FacilityBlock extends Model
 {
     protected $fillable = [
         'facility_id', 'start_date', 'end_date', 'reason',
+        'tournament_title', 'sponsor', 'organizer',
     ];
 
     protected $casts = [
