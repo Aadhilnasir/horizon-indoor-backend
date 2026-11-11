@@ -108,6 +108,7 @@ class FacilityBlockController extends Controller
             ->get()
             ->map(fn($b) => [
                 'id'         => $b->id,
+                'facility_id' => $b->facility_id,
                 'facility'   => $b->facility?->name,
                 'start_date' => $b->start_date->format('Y-m-d'),
                 'end_date'   => $b->end_date->format('Y-m-d'),
