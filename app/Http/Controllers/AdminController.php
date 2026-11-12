@@ -170,7 +170,7 @@ class AdminController extends Controller
     // ── GET /api/admin/users ─────────────────────────────────────────────────
     public function allUsers()
     {
-        $users = User::withCount('bookings')
+        $users = User::withCount(['bookings' => fn($q) => $q->where('is_shadow', false)])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(fn($u) => [
