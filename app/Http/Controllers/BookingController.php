@@ -240,9 +240,24 @@ class BookingController extends Controller
         $booking->load('facility');
 
         // Release slot locks after successful booking
+        // (same facility list as SlotLockController@lock: main + forward + reverse links)
+        $lockFacilityIds = collect([$data['facility_id']]);
+        if (! empty($facility->linked_facility_ids)) {
+            foreach ($facility->linked_facility_ids as $linkedId) {
+                $lockFacilityIds->push($linkedId);
+            }
+        }
+        Facility::all()->each(function ($f) use ($facility, $lockFacilityIds) {
+            if (! empty($f->linked_facility_ids) && in_array($facility->id, $f->linked_facility_ids)) {
+                $lockFacilityIds->push($f->id);
+            }
+        });
+        $lockFacilityIds = $lockFacilityIds->unique()->values();
+
         SlotLock::where('user_id', $request->user()->id)
-            ->where('facility_id', $data['facility_id'])
+            ->whereIn('facility_id', $lockFacilityIds)
             ->where('date', $data['date'])
+            ->where('session', $data['session'])
             ->delete();
 
         return response()->json([
