@@ -61,6 +61,28 @@ class FacilityBlockController extends Controller
             'organizer'        => $isTournament ? ($data['organizer'] ?? null) : null,
         ];
 
+        // Reject if the selected facility or any forward-linked facility is
+        // already blocked on overlapping dates, before anything is created
+        foreach (array_merge([$data['facility_id']], $linkedIds) as $checkId) {
+            $existing = FacilityBlock::with('facility')
+                ->where('facility_id', $checkId)
+                ->whereDate('start_date', '<=', $data['end_date'])
+                ->whereDate('end_date', '>=', $data['start_date'])
+                ->orderBy('start_date')
+                ->orderBy('id')
+                ->first();
+
+            if ($existing) {
+                $name = $existing->facility?->name ?? 'This facility';
+
+                return response()->json([
+                    'message' => "{$name} is already blocked from "
+                        . $existing->start_date->format('d M Y') . ' to '
+                        . $existing->end_date->format('d M Y') . '.',
+                ], 422);
+            }
+        }
+
         // Block the selected facility
         $block = FacilityBlock::create(['facility_id' => $data['facility_id']] + $attributes);
 
