@@ -45,8 +45,20 @@ class FacilityBlockController extends Controller
         ]);
 
         // Get linked facilities (shared courts)
-        $facility = Facility::findOrFail($data['facility_id']);
-        $linkedIds = $facility->linked_facility_ids ?? [];
+        $facility   = Facility::findOrFail($data['facility_id']);
+        $forwardIds = $facility->linked_facility_ids ?? [];
+
+        // Reverse links: facilities whose linked_facility_ids contains the
+        // selected one (e.g. Badminton 1 → Volleyball). Direct links only.
+        $reverseIds = Facility::all()
+            ->filter(fn($f) => ! empty($f->linked_facility_ids)
+                && in_array($facility->id, $f->linked_facility_ids))
+            ->pluck('id')
+            ->all();
+
+        // Selected + forward links must be free; reverse-only links are extra
+        $requiredIds = array_values(array_unique(array_merge([(int) $data['facility_id']], $forwardIds)));
+        $extraIds    = array_values(array_diff(array_unique($reverseIds), $requiredIds));
 
         $reason       = $data['reason'] ?? 'Tournament';
         $isTournament = $reason === 'Tournament';
@@ -63,7 +75,7 @@ class FacilityBlockController extends Controller
 
         // Reject if the selected facility or any forward-linked facility is
         // already blocked on overlapping dates, before anything is created
-        foreach (array_merge([$data['facility_id']], $linkedIds) as $checkId) {
+        foreach ($requiredIds as $checkId) {
             $existing = FacilityBlock::with('facility')
                 ->where('facility_id', $checkId)
                 ->whereDate('start_date', '<=', $data['end_date'])
@@ -83,12 +95,19 @@ class FacilityBlockController extends Controller
             }
         }
 
-        // Block the selected facility
+        // Block the selected facility first (keeps it the lowest id)
         $block = FacilityBlock::create(['facility_id' => $data['facility_id']] + $attributes);
 
-        // Auto-block linked facilities (shared courts)
-        foreach ($linkedIds as $linkedId) {
+        // Auto-block forward-linked facilities (shared courts)
+        foreach (array_slice($requiredIds, 1) as $linkedId) {
             FacilityBlock::create(['facility_id' => $linkedId] + $attributes);
+        }
+
+        // Auto-block reverse-linked facilities — always one row per block,
+        // even if already blocked, so e.g. Volleyball stays blocked while
+        // either badminton court is still blocked
+        foreach ($extraIds as $extraId) {
+            FacilityBlock::create(['facility_id' => $extraId] + $attributes);
         }
 
         return response()->json([
@@ -102,16 +121,31 @@ class FacilityBlockController extends Controller
     {
         $block = FacilityBlock::findOrFail($id);
 
-        // Get linked facilities to unblock them too
-        $facility  = Facility::findOrFail($block->facility_id);
-        $linkedIds = $facility->linked_facility_ids ?? [];
+        // Get forward + reverse linked facilities to unblock them too
+        $facility   = Facility::findOrFail($block->facility_id);
+        $forwardIds = $facility->linked_facility_ids ?? [];
+        $reverseIds = Facility::all()
+            ->filter(fn($f) => ! empty($f->linked_facility_ids)
+                && in_array($facility->id, $f->linked_facility_ids))
+            ->pluck('id')
+            ->all();
 
-        // Delete linked blocks with same dates
+        $linkedIds = array_values(array_diff(
+            array_unique(array_merge($forwardIds, $reverseIds)),
+            [$block->facility_id]
+        ));
+
+        // Delete at most one linked row per facility: same dates + reason,
+        // the lowest id created after this block
         foreach ($linkedIds as $linkedId) {
             FacilityBlock::where('facility_id', $linkedId)
-                ->where('start_date', $block->start_date)
-                ->where('end_date', $block->end_date)
-                ->delete();
+                ->whereDate('start_date', $block->start_date)
+                ->whereDate('end_date', $block->end_date)
+                ->where('reason', $block->reason)
+                ->where('id', '>', $block->id)
+                ->orderBy('id')
+                ->first()
+                ?->delete();
         }
 
         $block->delete();
