@@ -51,7 +51,7 @@ class BookingController extends Controller
             'slots.*'     => 'string',
             'paid_amount' => 'sometimes|integer|min:0',
             'guest_name'  => 'sometimes|nullable|string|max:100',
-            'guest_phone' => 'sometimes|nullable|string|max:20',
+            'guest_phone' => 'nullable|required_with:guest_name|string|max:20|regex:/^[0-9+\s]+$/',
             'is_hold'     => 'sometimes|boolean',
         ]);
 
